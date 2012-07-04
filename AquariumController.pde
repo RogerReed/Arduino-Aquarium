@@ -1,16 +1,17 @@
 #include <IRremote.h>
 #include <IRremoteInt.h>
-#include <WProgram.h>
+#include <Arduino.h>
 #include <Wire.h>
-#include <NewSoftSerial.h>
+#include <SoftwareSerial.h>
 #include <OneWire.h>
+#include <DateTime.h>
 #include <FormatDouble.h>
 #include <Time.h>
 #include <TimeAlarms.h>
 #include <DS1307RTC.h>
 
 /**
-* Copyright 2011, Roger Reed
+* Copyright 2010-2012, Roger Reed
 *
 * This program is free software; you can redistribute it and/or
 * modify it under the terms of the GNU General Public License
@@ -97,7 +98,7 @@ const float DAY1_ON_HOUR_MINUTE = hourMinuteToHour(DAY1_ON_HOUR, DAY1_ON_MINUTE)
   SKIMMER_OFF_HOUR_MINUTE = hourMinuteToHour(SKIMMER_OFF_HOUR, SKIMMER_OFF_MINUTE);
 
 // pin definitions
-const byte SUMP_TEMP_PIN = 22,
+const byte //SUMP_TEMP_PIN = 22, sump probe not connected
   OUTSIDE_TEMP_PIN = 23,
   HOOD_TEMP_PIN = 24,
   OVERFLOW_TEMP_PIN = 25,
@@ -168,7 +169,7 @@ int overflowTempMovingIndex = 0,
 // temperature variables
 float outsideTempSmoothed = INIT_TEMP, 
   hoodTemp = INIT_TEMP, 
-  sumpTemp = INIT_TEMP,
+  //sumpTemp = INIT_TEMP,  sump probe not connected
   overflowTempSmoothed = INIT_TEMP, 
   insideTemp = INIT_TEMP, 
   overflowTempMovingArray[TEMP_MOVING_ARRAY_SIZE], 
@@ -179,7 +180,7 @@ OneWire overflowTempOneWire(OVERFLOW_TEMP_PIN);
 OneWire insideTempOneWire(INSIDE_TEMP_PIN); 
 OneWire outsideTempOneWire(OUTSIDE_TEMP_PIN); 
 OneWire hoodTempOneWire(HOOD_TEMP_PIN); 
-OneWire sumpTempOneWire(SUMP_TEMP_PIN); 
+//OneWire sumpTempOneWire(SUMP_TEMP_PIN);   sump probe not connected
 
 // Infrared variables
 IRrecv irRecv(IR_RECV_PIN);
@@ -187,7 +188,7 @@ decode_results irResults;
 
 // temperature sensor error flags
 boolean overflowTempError = false,
-  sumpTempError = false,
+//  sumpTempError = false,  
   outsideTempError = false,
   insideTempError = false,
   hoodTempError = false;
@@ -230,8 +231,8 @@ sumpTopOffFloat = LOW,
 sumpEmptyFloat = LOW;
 
 // LCD serial communication objects
-NewSoftSerial lcd1Serial = NewSoftSerial(LCD1_RX_PIN, LCD1_TX_PIN);
-NewSoftSerial lcd2Serial = NewSoftSerial(LCD2_RX_PIN, LCD2_TX_PIN);
+SoftwareSerial lcd1Serial = SoftwareSerial(LCD1_RX_PIN, LCD1_TX_PIN);
+SoftwareSerial lcd2Serial = SoftwareSerial(LCD2_RX_PIN, LCD2_TX_PIN);
 
 // LCD variables
 boolean currentTimeColonBlinkOn = false;
@@ -248,7 +249,6 @@ long waveOnTimeSec = 0,
   previousWaveDirection = WAVE_DIRECTION_1; 
 boolean 
 feedWaveMode = false;
-
 
 // RO air pump variables
 long roAirPumpOnTimeSec = 0;
@@ -267,6 +267,10 @@ const int MOVING_SAMPLE_INTERVAL_SEC = 3;
 int movingSampleSec = 0; 
 boolean movingSample = true; // whether to take a data sample on this loop
 
+// delays 
+const int POST_SETUP_DELAY_MS = 1000,
+  POST_IR_HANDLE_DELAY_MS = 1000;
+
 /**
  * Arduino setup method
  */
@@ -284,12 +288,12 @@ void setup()
   setupAlarms();
   setupOutputPins();  
   initRelays();
-  updatePh();
+ // updatePh(); probe not connected
   
   setupLcd(&lcd1Serial, LCD1_TX_PIN);
   setupLcd(&lcd2Serial, LCD2_TX_PIN);
  
-  delay(1000);  
+  delay(POST_SETUP_DELAY_MS);  
 }
 
 /**
@@ -299,7 +303,7 @@ void loop()
 {        
   updateTemps();
   updateFloats();
-  updatePh();
+//  updatePh(); probe not connected
   
   syncRelays();
   
@@ -352,6 +356,7 @@ void handleInfrared() {
   switch(irResults.value){
     case SONY_IR_0:
     feed();
+    delay(POST_IR_HANDLE_DELAY_MS);
     break;
     case SONY_IR_1:
     if(digitalRead(DAY1_LIGHT_RELAY_PIN) == LOW){
@@ -359,6 +364,7 @@ void handleInfrared() {
     }else{
           day1LightOff();  
     }
+    delay(POST_IR_HANDLE_DELAY_MS);
     break;
     case SONY_IR_2:
     if(digitalRead(DAY2_LIGHT_RELAY_PIN) == LOW){
@@ -366,6 +372,7 @@ void handleInfrared() {
     }else{
           day2LightOff();  
     }
+    delay(POST_IR_HANDLE_DELAY_MS);
     break;
     case SONY_IR_3:
     if(digitalRead(SUMP_LIGHT_RELAY_PIN) == LOW){
@@ -373,6 +380,7 @@ void handleInfrared() {
     }else{
           sumpLightOff();  
     }
+    delay(POST_IR_HANDLE_DELAY_MS);
     break;
   }
   
@@ -382,7 +390,7 @@ void handleInfrared() {
 /**
  * Refreshes LCD 1 
  */
-void refreshLcd1(NewSoftSerial * lcdSerial)
+void refreshLcd1(SoftwareSerial * lcdSerial)
 {  
   char tempBuffer[7];
 
@@ -479,10 +487,10 @@ void refreshLcd1(NewSoftSerial * lcdSerial)
   // ph
   char phBuffer[5];
   fmtDouble(phSmoothed, 2, phBuffer, 6);  
-  //lcdSerial->print("          ");  // not showing anything when ph probe not hooked up
-  lcdSerial->print("  pH ");
-  lcdSerial->print(phBuffer);
-  lcdSerial->print(getDeltaChar(phMovingIndex, phMovingArray, PH_MOVING_ARRAY_SIZE));  
+  lcdSerial->print("          ");  // not showing anything when ph probe not hooked up
+  //lcdSerial->print("  pH ");
+  //lcdSerial->print(phBuffer);
+  //lcdSerial->print(getDeltaChar(phMovingIndex, phMovingArray, PH_MOVING_ARRAY_SIZE));  
   
   // line 4
   lcdSerial->print("?y3?x00");   
@@ -554,7 +562,7 @@ void refreshLcd1(NewSoftSerial * lcdSerial)
 /**
  * Refreshes LCD 2
  */
-void refreshLcd2(NewSoftSerial * lcdSerial)
+void refreshLcd2(SoftwareSerial * lcdSerial)
 {
   // line 1
   lcdSerial->print("?y0?x00");  
@@ -629,8 +637,9 @@ void refreshLcd2(NewSoftSerial * lcdSerial)
   char * errorMessage = 0;
   if(overflowTempError){
     errorMessage = "OVER PROBE ERR";
-  }else if(sumpTempError){
-    errorMessage = "SUMP PROBE ERR ";
+ // temporary since bad probe known
+ // }else if(sumpTempError){
+ //   errorMessage = "SUMP PROBE ERR ";
   }else if(insideTempError){
     errorMessage = "IN PROBE ERR   ";
   }else if(outsideTempError){
@@ -785,19 +794,21 @@ void syncRelays(){
   
 }
 
+/*
 void updatePh(){  
   if(movingSample){
     phAnalog = analogRead(PH_PIN);
       
-    sumpTempError = !updateTemp(&sumpTempOneWire, &sumpTemp, sumpTempError);
+    sumpTempError = !updateTemp(&sumpTempOneWire, &sumpTemp, sumpTempError);  
   
-    float phNow = 7.0 - (2.5 - phAnalog / 204.6) / (0.257179 + 0.000941468 * convertFahrenheitToCelius(sumpTemp));  // using sump temp since ph probe is in sump
+    float phNow = 7.0 - (2.5 - phAnalog / 204.6) / (0.257179 + 0.000941468 * convertFahrenheitToCelius(sumpTemp));
   
     phMovingArray[phMovingIndex] = phNow;
     phMovingIndex = ++phMovingIndex % PH_MOVING_ARRAY_SIZE;
     phSmoothed = calculateAverage(phMovingArray, PH_MOVING_ARRAY_SIZE);
   }
 }
+*/
 
 /**
  * Calculates the average of values in the array, discounting any values <= 0.
@@ -846,11 +857,11 @@ void updateTemps(){
     }
   }
   
-  sumpTempError = !updateTemp(&sumpTempOneWire, &sumpTemp, sumpTempError);
+  //sumpTempError = !updateTemp(&sumpTempOneWire, &sumpTemp, sumpTempError);  sump probe not connected
     
-  if(sumpTempError || sumpTemp <= MIN_REASONABLE_H20_TEMP_F || sumpTemp >= MAX_REASONABLE_H20_TEMP_F){
-    sumpTempError = true;
-  }
+  //if(sumpTempError || sumpTemp <= MIN_REASONABLE_H20_TEMP_F || sumpTemp >= MAX_REASONABLE_H20_TEMP_F){  sump probe not connected
+  //  sumpTempError = true;
+  //}
    
   hoodTempError = !updateTemp(&hoodTempOneWire, &hoodTemp, hoodTempError);       
   insideTempError = !updateTemp(&insideTempOneWire, &insideTemp, insideTempError);       
@@ -910,12 +921,12 @@ boolean updateTemp(OneWire * oneWireTherm, float * fltTemp, boolean previousErro
 /** 
  * Sets up LCD
  */
-void setupLcd(NewSoftSerial * lcdSerial, int pin){
+void setupLcd(SoftwareSerial * lcdSerial, int pin){
   pinMode(pin, OUTPUT);
   lcdSerial->begin(9600); 
 
   lcdSerial->print("?G420");
-  delay(100);	           // pause to allow LCD EEPROM to program
+  delay(100);             // pause to allow LCD EEPROM to program
 
   lcdSerial->print("?Bff");  // set backlight to 40 hex
   delay(100);                // pause to allow LCD EEPROM to program
@@ -955,7 +966,7 @@ void setupLcd(NewSoftSerial * lcdSerial, int pin){
 /**
  * Debug method to show temps on passed LCD serial 
  */
-void refreshLcdTemps(NewSoftSerial * lcdSerial){
+void refreshLcdTemps(SoftwareSerial * lcdSerial){
   char tempBuffer[6];
 
   lcdSerial->print("?y0?x00");  
@@ -972,9 +983,9 @@ void refreshLcdTemps(NewSoftSerial * lcdSerial){
   fmtDouble(outsideTempSmoothed, 1, tempBuffer, 6);  
   lcdSerial->print(tempBuffer);
   lcdSerial->print(DEGREE_LCD_CHAR);
-  lcdSerial->print(" Sump ");
-  fmtDouble(sumpTemp, 1, tempBuffer, 6);  
-  lcdSerial->print(tempBuffer);
+  //lcdSerial->print(" Sump ");  sump probe not connected
+  //fmtDouble(sumpTemp, 1, tempBuffer, 6);  
+  //lcdSerial->print(tempBuffer);
   lcdSerial->print(DEGREE_LCD_CHAR);
   lcdSerial->print("?y2?x00");  
   lcdSerial->print("Hood ");
@@ -986,7 +997,7 @@ void refreshLcdTemps(NewSoftSerial * lcdSerial){
 /**
  * Debug method to show floats on passed LCD serial
  */ 
-void refreshLcdFloats(NewSoftSerial * lcdSerial){
+void refreshLcdFloats(SoftwareSerial * lcdSerial){
   lcdSerial->print("?y0?x00");  
   lcdSerial->print("RO 1=");    
   lcdSerial->print(roFloat1);
@@ -1059,8 +1070,8 @@ void serialDebug(){
     Serial.print(outsideTempSmoothed);
     Serial.print("; hoodTemp=");
     Serial.print(hoodTemp);
-    Serial.print("; sumpTemp=");
-    Serial.print(sumpTemp);
+ //   Serial.print("; sumpTemp="); sump probe not connected
+ //   Serial.print(sumpTemp);
     Serial.print("; roFloat1=");
     Serial.print(roFloat1);
     Serial.print("; roFloat2=");
@@ -1317,4 +1328,3 @@ int getStepperMs2Mode(int stepperMode){
     return 1;    
   }  
 }
-
